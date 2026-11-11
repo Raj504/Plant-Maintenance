@@ -14,6 +14,7 @@ spare parts, daily plant logs, AMC contracts, statutory compliance and calibrati
 
 1. [Quick start](#1-quick-start)
 2. [Demo accounts](#2-demo-accounts)
+2a. [All commands – reference](#2a-all-commands--reference)
 3. [Project structure – where things are](#3-project-structure)
 4. [Design decisions and why](#4-design-decisions-and-why)
 5. [Database schema](#5-database-schema)
@@ -68,23 +69,127 @@ You can also run every automated check by hand: `php artisan pm:run-schedulers`
 
 ## 2. Demo accounts
 
-All demo users use the password **`password`**. The login page shows one-click buttons for them when `APP_ENV=local`.
+Created by `database/seeders/UserSeeder.php`. **Every account has the password `password`.**
+The login page shows one-click buttons for them when `APP_ENV=local`.
 
-| Email | Role | What they can do |
-|---|---|---|
-| admin@plant.com | Super Admin | Everything |
-| employee@plant.com | Employee / Requester | Raise and view own requests |
-| inspector@plant.com | Maintenance Inspector | Step 2 – inspection |
-| expert@plant.com | Technical Expert | Step 3 – technical assessment |
-| approver@plant.com | Budget / Admin Approver | Step 4 – approve / reject / send back, emergency authorisation |
-| supervisor@plant.com | Maintenance Supervisor | Assign, verify and close work orders, PM plans |
-| technician@plant.com | Technician | Execute work orders, fill PM checklists |
-| safety@plant.com | Safety Officer | Approve / close permits (PTW), LOTO |
-| store@plant.com | Store Manager | Spares, stock ledger, issue / return, purchase requisitions |
-| operator@plant.com | Plant Operator | Daily plant logs, shift handover |
-| compliance@plant.com | Compliance Officer | Statutory compliance & calibration |
-| manager@plant.com | Maintenance Manager | All maintenance modules (no admin) |
-| management@plant.com | Management | Dashboard & reports, read-only |
+| # | Email | Password | Name | Role | What they can do |
+|---|---|---|---|---|---|
+| 1 | admin@plant.com | password | System Admin | Super Admin | Everything |
+| 2 | employee@plant.com | password | Ravi Operator | Employee / Requester | Raise and view own requests |
+| 3 | inspector@plant.com | password | Imran Inspector | Maintenance Inspector | Step 2 – inspection |
+| 4 | expert@plant.com | password | Tarun Expert | Technical Expert | Step 3 – technical assessment |
+| 5 | supervisor@plant.com | password | Sunil Supervisor | Maintenance Supervisor | Assign, verify and close work orders, PM plans, permits |
+| 6 | technician@plant.com | password | Tej Technician | Technician | Execute work orders, fill PM checklists, LOTO |
+| 7 | approver@plant.com | password | Bhavna Approver | Budget / Admin Approver | Step 4 – approve / reject / send back, emergency authorisation |
+| 8 | safety@plant.com | password | Sameer Safety | Safety Officer | Approve / close permits (PTW), LOTO |
+| 9 | store@plant.com | password | Sheetal Store | Store Manager | Spares, stock ledger, issue / return, adjustments, purchase requisitions, vendors |
+| 10 | operator@plant.com | password | Prakash Plant | Plant Operator | Daily plant logs, shift handover, running hours |
+| 11 | compliance@plant.com | password | Chitra Compliance | Compliance Officer | Statutory compliance & calibration |
+| 12 | manager@plant.com | password | Mahesh Manager | Maintenance Manager | All maintenance modules (no admin module) |
+| 13 | management@plant.com | password | Meera Management | Management | Dashboard & reports, read-only |
+| 14 | electrician@plant.com | password | Elan Electrician | Technician | Same as technician, member of the Electrical Team |
+
+To change a password: log in → top-right menu → **My Profile**, or Admin → **Users** → edit.
+On a real installation delete or deactivate these accounts after creating your own users.
+
+## 2a. All commands – reference
+
+Run every command from the project folder (`plant+project`, the folder that contains `artisan`).
+
+### Installation (first time)
+
+```bash
+composer install                  # install PHP packages (Laravel, dompdf)
+copy .env.example .env            # Windows;  cp .env.example .env  on Linux/Mac
+php artisan key:generate          # sets APP_KEY in .env
+```
+
+Create the database in MySQL (phpMyAdmin or the command line), then put its name and credentials in `.env`:
+
+```sql
+CREATE DATABASE plant_maintenance CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### Database – migrations & seeding
+
+```bash
+php artisan migrate                      # create all tables (keeps existing data)
+php artisan migrate:status               # show which migrations have run
+php artisan migrate:fresh                # DROP everything and recreate all tables (empty)
+php artisan migrate:fresh --seed         # drop, recreate AND seed (roles, masters, demo users, demo data)
+php artisan migrate:rollback             # undo the last batch
+php artisan db:seed                      # run all seeders on an existing database
+```
+
+Run a single seeder (safe to repeat – they use updateOrCreate / firstOrCreate):
+
+```bash
+php artisan db:seed --class=RolePermissionSeeder   # permissions + the 14 roles (run after adding a permission)
+php artisan db:seed --class=MasterDataSeeder       # plant, departments, shifts, categories, vendors, teams, log types, checklists, settings
+php artisan db:seed --class=UserSeeder             # the 14 demo accounts above
+php artisan db:seed --class=DemoDataSeeder         # assets, spares + opening stock, BOM, PM plans, requests, work orders, AMC, compliance, calibration
+```
+
+`DemoDataSeeder` only runs when `SEED_DEMO_DATA=true` in `.env` (default) and only if there are no assets yet.
+For a production installation set `SEED_DEMO_DATA=false`, run `php artisan migrate --seed`, log in as
+`admin@plant.com`, create your real users, then deactivate the demo accounts.
+
+### Running the application
+
+```bash
+php artisan serve                        # http://localhost:8000
+php artisan serve --port=8080            # different port
+php artisan storage:link                 # one time: makes uploads reachable at /storage/... (required for photos/documents)
+```
+
+### Scheduler / automation
+
+```bash
+php artisan pm:run-schedulers            # run every automated check once (PM due, overdue WOs, low stock, AMC, compliance)
+php artisan pm:run-schedulers --only=pm  # only the preventive-maintenance due check
+                                         #   other values: workorders | stock | amc | compliance
+php artisan schedule:work                # development: runs the schedule in the foreground
+php artisan schedule:list                # shows what is scheduled and when
+```
+
+Production cron (Linux) – one line, runs every minute and Laravel decides what is due:
+
+```
+* * * * * cd /path/to/plant+project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Windows Task Scheduler: create a task that runs `php artisan schedule:run` in the project folder every minute.
+
+### Tests
+
+```sql
+CREATE DATABASE plant_maintenance_test;   -- one time; tests never touch plant_maintenance
+```
+
+```bash
+php artisan test                                   # all tests
+php artisan test --filter=SmokeRoutesTest          # every page + every report + exports
+php artisan test --filter=MaintenanceWorkflowTest  # end-to-end business rules
+```
+
+### Maintenance / troubleshooting
+
+```bash
+php artisan route:list                   # all URLs with their permission middleware
+php artisan optimize:clear               # clear config, route, view and cache files (after editing .env)
+php artisan view:clear                   # if a Blade change does not show
+php artisan config:cache                 # production only – cache config (run optimize:clear after .env edits)
+php artisan tinker                       # interactive shell, e.g.  App\Models\Asset::count()
+```
+
+### Reset to a clean demo
+
+```bash
+php artisan migrate:fresh --seed
+php artisan optimize:clear
+```
+
+Uploaded files live in `storage/app/public/pm/`; delete that folder too if you want a fully clean start.
 
 ## 3. Project structure
 
